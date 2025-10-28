@@ -2,6 +2,7 @@ import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
 import is_ip_private from "private-ip";
 import { RequestPayload } from "./types.js";
+import { ProxyAgent } from "undici";
 
 export class Fetcher {
   private static applyLengthLimits(text: string, maxLength: number, startIndex: number): string {
@@ -22,13 +23,25 @@ export class Fetcher {
           `Fetcher blocked an attempt to fetch a private IP ${url}. This is to prevent a security vulnerability where a local MCP could fetch privileged local IPs and exfiltrate data.`,
         );
       }
-      const response = await fetch(url, {
+
+      // Check for proxy environment variables
+      const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy ||
+                       process.env.HTTP_PROXY || process.env.http_proxy;
+
+      const fetchOptions: any = {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           ...headers,
         },
-      });
+      };
+
+      // Add proxy agent if proxy is configured
+      if (proxyUrl) {
+        fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
+      }
+
+      const response = await fetch(url, fetchOptions);
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
